@@ -6,20 +6,24 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template
 
+# Core application configuration for the cinema financial dashboard.
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "cinema_branch.db"
 
+# Flask app initialization and database path configuration.
 app = Flask(__name__)
 app.config["DATABASE"] = str(DB_PATH)
 
 
+# Create and return a reusable SQLite connection for all dashboard queries.
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(app.config["DATABASE"])
     conn.row_factory = sqlite3.Row
     return conn
 
 
+# Initialize the SQLite schema and load demo data when the database is empty.
 def init_db() -> None:
     DATA_DIR.mkdir(exist_ok=True)
     conn = get_db_connection()
@@ -64,11 +68,13 @@ def init_db() -> None:
     )
     conn.commit()
 
+    # Seed the demo dataset only once so the dashboard always has sample content.
     if conn.execute("SELECT COUNT(*) FROM daily_metrics").fetchone()[0] == 0:
         seed_demo_data(conn)
     conn.close()
 
 
+# Populate the database with realistic cinema sales, expenses, and customer trends.
 def seed_demo_data(conn: sqlite3.Connection) -> None:
     start_date = datetime(2026, 5, 1)
     categories = [
@@ -137,6 +143,7 @@ def seed_demo_data(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+# Pull together summary metrics used by the main overview cards on the dashboard.
 def get_overview() -> dict:
     conn = get_db_connection()
     revenue_row = conn.execute(
@@ -169,6 +176,7 @@ def get_overview() -> dict:
     }
 
 
+# Build the daily revenue and operating trend dataset shown in the dashboard tables.
 def get_daily_metrics() -> list[dict]:
     conn = get_db_connection()
     rows = conn.execute(
@@ -209,6 +217,7 @@ def get_daily_metrics() -> list[dict]:
     return records
 
 
+# Aggregate expenses by category to power the cost distribution chart and panel.
 def get_expense_breakdown() -> list[dict]:
     conn = get_db_connection()
     rows = conn.execute(
@@ -218,6 +227,7 @@ def get_expense_breakdown() -> list[dict]:
     return [{"category": row["category"], "total": float(row["total"]) } for row in rows]
 
 
+# Summarize customer segments to show attendance mix and satisfaction trends.
 def get_customer_segments() -> list[dict]:
     conn = get_db_connection()
     rows = conn.execute(
@@ -234,6 +244,7 @@ def get_customer_segments() -> list[dict]:
     return [{"segment": row["segment"], "visitors": int(row["visitors"] or 0), "avg_spend": float(row["avg_spend"] or 0), "satisfaction": float(row["satisfaction"] or 0)} for row in rows]
 
 
+# Export the finance snapshot to CSV for download and offline analysis.
 def build_csv_report() -> str:
     output = io.StringIO()
     writer = csv.writer(output)
@@ -279,9 +290,11 @@ def build_csv_report() -> str:
     return output.getvalue()
 
 
+# Ensure the SQLite database and sample records are ready before serving requests.
 init_db()
 
 
+# Render the main dashboard page with overview metrics, daily trends, and segment data.
 @app.route("/")
 def index():
     summary = get_overview()
@@ -297,6 +310,7 @@ def index():
     )
 
 
+# Return the same dashboard payload as JSON for API consumers and front-end refreshes.
 @app.route("/api/overview")
 def api_overview():
     return jsonify(
@@ -309,6 +323,7 @@ def api_overview():
     )
 
 
+# Generate and download a CSV file containing the cinema's financial performance report.
 @app.route("/api/report")
 def api_report():
     csv_data = build_csv_report()
@@ -319,11 +334,13 @@ def api_report():
     )
 
 
+# Health endpoint to confirm the app is running and the database path is configured.
 @app.route("/health")
 def healthcheck():
     return jsonify({"status": "ok", "database": app.config["DATABASE"]})
 
 
+# Run the Flask development server when the script is executed directly.
 if __name__ == "__main__":
     init_db()
     app.run(debug=True, host="0.0.0.0", port=5000)
