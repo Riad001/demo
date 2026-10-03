@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CineArc Branch Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Single-branch analytics</p>
+          <h1>CineArc Downtown</h1>
+        </div>
+        <div class="topbar-actions">
+          <span class="status-pill">Live prototype</span>
+          <a class="button primary" href="/api/report">Download CSV Report</a>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <section class="kpi-grid">
+          <article class="card metric-card accent-blue">
+            <span class="label">Total revenue</span>
+            <strong>£{{ '%.2f' % summary.total_revenue }}</strong>
+            <small>Ticket, concession, memberships, parking</small>
+          </article>
+          <article class="card metric-card accent-gold">
+            <span class="label">Operating expense</span>
+            <strong>£{{ '%.2f' % summary.total_expenses }}</strong>
+            <small>Utilities, staffing, inventory, maintenance</small>
+          </article>
+          <article class="card metric-card accent-green">
+            <span class="label">Net profit</span>
+            <strong>£{{ '%.2f' % summary.net_profit }}</strong>
+            <small>Revenue minus direct operating costs</small>
+          </article>
+          <article class="card metric-card accent-purple">
+            <span class="label">Avg spend / visitor</span>
+            <strong>£{{ '%.2f' % summary.avg_spend_per_visitor }}</strong>
+            <small>{{ summary.total_visitors }} customers tracked</small>
+          </article>
+        </section>
+
+        <section class="insights-grid">
+          <article class="card chart-card wide">
+            <div class="section-header">
+              <h2>Revenue vs expenses</h2>
+              <span class="muted">14-day trend</span>
+            </div>
+            <canvas id="revenueChart"></canvas>
+          </article>
+
+          <article class="card chart-card">
+            <div class="section-header">
+              <h2>Expense mix</h2>
+              <span class="muted">Current month</span>
+            </div>
+            <canvas id="expenseChart"></canvas>
+          </article>
+        </section>
+
+        <section class="insights-grid second-row">
+          <article class="card chart-card">
+            <div class="section-header">
+              <h2>Customer segments</h2>
+              <span class="muted">Spending profile</span>
+            </div>
+            <canvas id="segmentChart"></canvas>
+          </article>
+
+          <article class="card list-card">
+            <div class="section-header">
+              <h2>Key performance</h2>
+            </div>
+            <ul class="stat-list">
+              <li>
+                <span>Tickets sold</span>
+                <strong>{{ '{:,.0f}'.format(summary.tickets_sold) }}</strong>
+              </li>
+              <li>
+                <span>Visitors</span>
+                <strong>{{ '{:,.0f}'.format(summary.total_visitors) }}</strong>
+              </li>
+              <li>
+                <span>Avg ticket price</span>
+                <strong>£{{ '%.2f' % summary.average_ticket_price }}</strong>
+              </li>
+              <li>
+                <span>Peak hour</span>
+                <strong>{{ summary.average_peak_hour | int }}:00</strong>
+              </li>
+            </ul>
+          </article>
+        </section>
+
+        <section class="card table-card">
+          <div class="section-header">
+            <h2>Daily operating summary</h2>
+            <span class="muted">Last 14 days</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Tickets</th>
+                  <th>Visitors</th>
+                  <th>Revenue</th>
+                  <th>Expenses</th>
+                  <th>Net</th>
+                  <th>Peak hour</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in daily %}
+                <tr>
+                  <td>{{ row.date }}</td>
+                  <td>{{ row.tickets_sold }}</td>
+                  <td>{{ row.total_visitors }}</td>
+                  <td>£{{ '%.2f' % row.total_revenue }}</td>
+                  <td>£{{ '%.2f' % row.total_expenses }}</td>
+                  <td>£{{ '%.2f' % row.net_profit }}</td>
+                  <td>{{ row.peak_hour }}:00</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const metrics = {{ daily | tojson | safe }};
+      const expenseBreakdown = {{ expenses | tojson | safe }};
+      const segmentBreakdown = {{ segments | tojson | safe }};
+
+      const labels = metrics.map((entry) => entry.date.slice(5));
+      const revenueSeries = metrics.map((entry) => entry.total_revenue);
+      const expenseSeries = metrics.map((entry) => entry.total_expenses);
+
+      new Chart(document.getElementById('revenueChart'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Revenue',
+              data: revenueSeries,
+              borderColor: '#4f46e5',
+              backgroundColor: 'rgba(79, 70, 229, 0.16)',
+              borderWidth: 3,
+              tension: 0.35,
+              fill: true
+            },
+            {
+              label: 'Expenses',
+              data: expenseSeries,
+              borderColor: '#f59e0b',
+              backgroundColor: 'rgba(245, 158, 11, 0.12)',
+              borderWidth: 3,
+              tension: 0.35,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              ticks: {
+                callback: value => `£${value}`
+              }
+            }
+          }
+        }
+      });
+
+      new Chart(document.getElementById('expenseChart'), {
+        type: 'doughnut',
+        data: {
+          labels: expenseBreakdown.map((entry) => entry.category),
+          datasets: [{
+            data: expenseBreakdown.map((entry) => entry.total),
+            borderWidth: 0,
+            backgroundColor: ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#60a5fa', '#a78bfa', '#f97316']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom' } }
+        }
+      });
+
+      new Chart(document.getElementById('segmentChart'), {
+        type: 'bar',
+        data: {
+          labels: segmentBreakdown.map((entry) => entry.segment),
+          datasets: [{
+            label: 'Visitors',
+            data: segmentBreakdown.map((entry) => entry.visitors),
+            backgroundColor: '#10b981',
+            borderRadius: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
